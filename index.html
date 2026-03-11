@@ -371,7 +371,8 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 // ── STATE ──
 var suppliers=[], shipments=[], filter='all', photo=null, editId=null;
 var GH_TOKEN='', GIST_ID='';
-var saveTimer=null, saving=false;
+var saveTimer=null, pollTimer=null;
+var lastGistUpdatedAt='';
 
 // ── HELPERS ──
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
@@ -392,6 +393,11 @@ function setSyncUI(state,lbl){
   dot.className='dot '+(state==='ok'?'ok':state==='busy'?'busy':'err');
   sl.textContent=lbl||'--';
 }
+function setSyncTime(){
+  var n=new Date();
+  var t=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0')+':'+n.getSeconds().toString().padStart(2,'0');
+  setSyncUI('ok','Sync '+t);
+}
 
 // ── GITHUB GIST API ──
 function ghFetch(method,path,body){
@@ -402,22 +408,30 @@ function ghFetch(method,path,body){
   });
 }
 
-async function loadFromGist(){
-  setSyncUI('busy','Se incarca...');
+async function loadFromGist(silent){
+  if(!silent) setSyncUI('busy','Se incarca...');
   try{
     var r=await ghFetch('GET','/gists/'+GIST_ID);
     if(!r.ok) throw new Error('HTTP '+r.status);
     var data=await r.json();
+    // Check if Gist actually changed since last load — skip re-render if not
+    var gistUpdated=data.updated_at||'';
+    if(silent && gistUpdated && gistUpdated===lastGistUpdatedAt){
+      // No change — just update the clock quietly
+      setSyncTime();
+      return;
+    }
+    lastGistUpdatedAt=gistUpdated;
     var content=data.files['subtracker-data.json'].content;
     var parsed=JSON.parse(content);
     suppliers=parsed.suppliers||[];
     shipments=parsed.shipments||[];
-    setSyncUI('ok','Sincronizat ✓');
+    setSyncTime();
     renderAll();
     checkNotif();
   }catch(e){
     setSyncUI('err','Eroare sync');
-    toast('Eroare la incarcare: '+e.message,true);
+    if(!silent) toast('Eroare la incarcare: '+e.message,true);
   }
 }
 
@@ -434,7 +448,9 @@ async function pushToGist(){
   try{
     var r=await ghFetch('PATCH','/gists/'+GIST_ID,{files:{'subtracker-data.json':{content:content}}});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    setSyncUI('ok','Salvat ✓');
+    var data=await r.json();
+    lastGistUpdatedAt=data.updated_at||''; // track our own save so poll doesn't re-render
+    setSyncTime();
   }catch(e){
     setSyncUI('err','Eroare salvare');
     toast('Eroare la salvare!',true);
@@ -443,8 +459,7 @@ async function pushToGist(){
 
 async function syncNow(){
   toast('Se sincronizeaza...');
-  await loadFromGist();
-  toast('Sincronizat!');
+  await loadFromGist(false);
 }
 
 // ── SETUP ──
@@ -497,9 +512,10 @@ async function connectGitHub(){
 
 function resetCfg(){
   if(!confirm('Deconectati acest dispozitiv de la GitHub?')) return;
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   localStorage.removeItem('st_gh_token');
   localStorage.removeItem('st_gist_id');
-  GH_TOKEN=''; GIST_ID='';
+  GH_TOKEN=''; GIST_ID=''; lastGistUpdatedAt='';
   document.getElementById('setup').classList.remove('hidden');
 }
 
@@ -507,7 +523,12 @@ function startApp(){
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('loading').classList.add('hidden');
   initNotifBanner();
-  loadFromGist();
+  loadFromGist(false);
+  // Poll every 30s — silent (no spinner, no toast unless data changed)
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer=setInterval(function(){
+    if(GH_TOKEN&&GIST_ID&&!document.hidden) loadFromGist(true);
+  },30000);
 }
 
 // ── INIT ──
@@ -522,8 +543,8 @@ window.addEventListener('DOMContentLoaded',function(){
   // offline detection
   window.addEventListener('offline',function(){document.getElementById('offline-bar').style.display='block';setSyncUI('err','Offline');});
   window.addEventListener('online',function(){document.getElementById('offline-bar').style.display='none';pushToGist();});
-  // sync when tab becomes visible again (phone switching apps)
-  document.addEventListener('visibilitychange',function(){if(!document.hidden&&GH_TOKEN&&GIST_ID)loadFromGist();});
+  // sync when tab/app becomes visible again — non-silent so data always refreshes
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&GH_TOKEN&&GIST_ID)loadFromGist(false);});
 });
 
 // ── TABS ──
