@@ -401,9 +401,13 @@ function setSyncTime(){
 
 // ── GITHUB GIST API ──
 function ghFetch(method,path,body){
-  return fetch('https://api.github.com'+path,{
+  // Append timestamp to GET requests to bust iOS Safari's aggressive fetch cache
+  var url='https://api.github.com'+path;
+  if(method==='GET') url+=(url.includes('?')?'&':'?')+'_='+Date.now();
+  return fetch(url,{
     method:method,
     headers:{'Authorization':'token '+GH_TOKEN,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+    cache:'no-store',
     body:body?JSON.stringify(body):undefined
   });
 }
