@@ -829,21 +829,25 @@ function exportPDF(){
 }
 
 // ── NOTIFICATIONS ──
+var notifSupported = (typeof Notification !== 'undefined');
+
 function initNotifBanner(){
-  if(!('Notification' in window)) return;
   var nb=document.getElementById('nb');
+  if(!notifSupported){nb.classList.add('hidden');return;}
   if(Notification.permission==='granted'){nb.classList.add('hidden');checkNotif();}
   else if(Notification.permission!=='denied'){nb.classList.remove('hidden');}
+  else{nb.classList.add('hidden');}
 }
 function reqNotif(){
+  if(!notifSupported){toast('Notificarile nu sunt suportate pe acest dispozitiv.',true);return;}
   Notification.requestPermission().then(function(p){
     document.getElementById('nb').classList.add('hidden');
     if(p==='granted'){toast('Notificari activate!');checkNotif();}
-    else toast('Respins.',true);
+    else toast('Notificarile au fost respinse.',true);
   });
 }
 function checkNotif(){
-  if(Notification.permission!=='granted') return;
+  if(!notifSupported||Notification.permission!=='granted') return;
   var ov=shipments.filter(function(s){return s.status!=='received'&&s.returnDate<today();});
   var dt=shipments.filter(function(s){return s.status!=='received'&&s.returnDate===today();});
   var dm=shipments.filter(function(s){return s.status!=='received'&&s.returnDate===tomorrow();});
