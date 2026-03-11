@@ -193,32 +193,50 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 <!-- SETUP -->
 <div id="setup">
   <div class="setup-logo">&#9881; SubTracker</div>
-  <p class="setup-sub">Configurare GitHub Gist<br>O singura data &bull; ~3 minute &bull; 100% gratuit</p>
-  <div class="setup-box">
-    <h2>&#128279; Conectare GitHub</h2>
-    <p>Datele tale vor fi salvate intr-un Gist privat pe contul tau GitHub si sincronizate automat intre toate dispozitivele.</p>
+  <p class="setup-sub">Sincronizare prin GitHub Gist &bull; gratuit</p>
 
+  <!-- Mode picker -->
+  <div class="setup-box" id="setup-pick" style="max-width:480px;width:100%">
+    <h2 style="margin-bottom:16px">&#128241; Acest dispozitiv este...</h2>
+    <button class="btn btn-p" onclick="showMode('new')" style="margin-bottom:10px">&#127381; Primul dispozitiv — configurez pentru prima oara</button>
+    <button class="btn btn-s" onclick="showMode('join')">&#128279; Al doilea dispozitiv — am deja aplicatia pe alt dispozitiv</button>
+  </div>
+
+  <!-- NEW DEVICE -->
+  <div class="setup-box hidden" id="setup-new" style="max-width:480px;width:100%">
+    <h2>&#127381; Configurare initiala</h2>
+    <p>Creeaza un token GitHub si aplicatia va genera automat un Gist privat pentru datele tale.</p>
     <div class="steps">
       <b>Pas 1 — Creaza un Personal Access Token:</b><br>
       Mergi la <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a><br>
-      &bull; Note: <code>SubTracker</code><br>
-      &bull; Expiration: <code>No expiration</code><br>
-      &bull; Bifeaza <b>&#10003; gist</b><br>
-      &bull; Click <b>Generate token</b> &rarr; copiaza tokenul<br><br>
-      <b>Pas 2 — Lipeste tokenul mai jos si apasa Conecteaza.</b><br>
-      Aplicatia va crea automat un Gist privat pentru datele tale.
+      &bull; Note: <code>SubTracker</code> &bull; Expiration: <code>No expiration</code><br>
+      &bull; Bifeaza <b>&#10003; gist</b> &rarr; <b>Generate token</b> &rarr; copiaza<br><br>
+      <b>Pas 2 — Lipeste tokenul mai jos si apasa Conecteaza.</b>
     </div>
-
-    <div id="setup-err" class="err-box hidden"></div>
-
+    <div id="setup-err-new" class="err-box hidden"></div>
     <label style="font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:8px;">Personal Access Token</label>
-    <input type="password" id="gh-token" class="inp inp-mono" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <input type="password" id="gh-token-new" class="inp inp-mono" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <p style="font-size:12px;color:var(--t3);margin-bottom:14px;line-height:1.6;">&#128274; Tokenul se salveaza doar local pe acest dispozitiv.</p>
+    <button class="btn btn-p" onclick="connectNew()" style="margin-bottom:10px">&#128279; Conecteaza si creeaza Gist</button>
+    <button class="btn btn-s" onclick="showMode(null)">&#8592; Inapoi</button>
+  </div>
 
-    <p style="font-size:12px;color:var(--t3);margin-bottom:14px;line-height:1.6;">
-      &#128274; Tokenul este salvat <b>doar local</b> pe acest dispozitiv (localStorage). Nu este transmis nicaieri altundeva decat catre api.github.com.
-    </p>
-
-    <button class="btn btn-p" onclick="connectGitHub()">&#128279; Conecteaza si porneste</button>
+  <!-- JOIN EXISTING -->
+  <div class="setup-box hidden" id="setup-join" style="max-width:480px;width:100%">
+    <h2>&#128279; Conectare la Gist existent</h2>
+    <p>Foloseste acelasi token si acelasi Gist ID ca pe primul dispozitiv. Gasesti Gist ID-ul in aplicatie la <b>Schimba cont &rarr; Arata Gist ID</b>.</p>
+    <div class="steps">
+      <b>Pas 1</b> — Pe primul dispozitiv, apasa <b>"Schimba cont"</b> din coltul dreapta-sus &rarr; <b>"Arata Gist ID"</b> &rarr; copiaza codul.<br><br>
+      <b>Pas 2</b> — Lipeste tokenul si Gist ID-ul mai jos.
+    </div>
+    <div id="setup-err-join" class="err-box hidden"></div>
+    <label style="font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:8px;">Personal Access Token</label>
+    <input type="password" id="gh-token-join" class="inp inp-mono" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" style="margin-bottom:12px">
+    <label style="font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:8px;">Gist ID</label>
+    <input type="text" id="gh-gist-join" class="inp inp-mono" placeholder="a1b2c3d4e5f6..." autocomplete="off">
+    <p style="font-size:12px;color:var(--t3);margin-bottom:14px;line-height:1.6;">&#128274; Tokenul se salveaza doar local pe acest dispozitiv.</p>
+    <button class="btn btn-p" onclick="connectJoin()" style="margin-bottom:10px">&#128279; Conecteaza</button>
+    <button class="btn btn-s" onclick="showMode(null)">&#8592; Inapoi</button>
   </div>
 </div>
 
@@ -467,30 +485,28 @@ async function syncNow(){
 }
 
 // ── SETUP ──
-async function connectGitHub(){
-  var token=document.getElementById('gh-token').value.trim();
-  var errEl=document.getElementById('setup-err');
+function showMode(mode){
+  document.getElementById('setup-pick').classList.add('hidden');
+  document.getElementById('setup-new').classList.add('hidden');
+  document.getElementById('setup-join').classList.add('hidden');
+  if(!mode) document.getElementById('setup-pick').classList.remove('hidden');
+  else if(mode==='new') document.getElementById('setup-new').classList.remove('hidden');
+  else if(mode==='join') document.getElementById('setup-join').classList.remove('hidden');
+}
+
+async function connectNew(){
+  var token=document.getElementById('gh-token-new').value.trim();
+  var errEl=document.getElementById('setup-err-new');
   errEl.classList.add('hidden');
-
-  if(!token||!token.startsWith('gh')){
-    errEl.textContent='Token invalid. Trebuie sa inceapa cu "ghp_" sau "github_pat_".';
-    errEl.classList.remove('hidden');
-    return;
-  }
-
+  if(!token||!token.startsWith('gh')){errEl.textContent='Token invalid.';errEl.classList.remove('hidden');return;}
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('loading').classList.remove('hidden');
   document.getElementById('loading-msg').textContent='Se verifica tokenul...';
-
-  // Test token
   try{
     var r=await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
     if(!r.ok) throw new Error('Token invalid sau fara permisiuni gist.');
     var user=await r.json();
-
     document.getElementById('loading-msg').textContent='Se creeaza Gist-ul...';
-
-    // Create gist
     var gr=await fetch('https://api.github.com/gists',{
       method:'POST',
       headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
@@ -498,28 +514,72 @@ async function connectGitHub(){
     });
     if(!gr.ok) throw new Error('Nu s-a putut crea Gist-ul.');
     var gist=await gr.json();
-
     GH_TOKEN=token; GIST_ID=gist.id;
     localStorage.setItem('st_gh_token',token);
     localStorage.setItem('st_gist_id',gist.id);
-
     document.getElementById('loading').classList.add('hidden');
     startApp();
-    toast('Conectat ca @'+user.login+' !');
+    toast('Conectat ca @'+user.login+'!');
   }catch(e){
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('setup').classList.remove('hidden');
+    showMode('new');
+    errEl.textContent='Eroare: '+e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function connectJoin(){
+  var token=document.getElementById('gh-token-join').value.trim();
+  var gistId=document.getElementById('gh-gist-join').value.trim();
+  var errEl=document.getElementById('setup-err-join');
+  errEl.classList.add('hidden');
+  if(!token||!token.startsWith('gh')){errEl.textContent='Token invalid.';errEl.classList.remove('hidden');return;}
+  if(!gistId){errEl.textContent='Introduceti Gist ID-ul.';errEl.classList.remove('hidden');return;}
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('loading-msg').textContent='Se verifica conexiunea...';
+  try{
+    // Verify token
+    var r=await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
+    if(!r.ok) throw new Error('Token invalid.');
+    var user=await r.json();
+    // Verify gist exists and is readable
+    var gr=await fetch('https://api.github.com/gists/'+gistId+'?_='+Date.now(),{
+      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'},
+      cache:'no-store'
+    });
+    if(!gr.ok) throw new Error('Gist ID invalid sau nu aveti acces la el.');
+    var gist=await gr.json();
+    if(!gist.files||!gist.files['subtracker-data.json']) throw new Error('Gist-ul gasit nu contine date SubTracker. Verificati Gist ID-ul.');
+    GH_TOKEN=token; GIST_ID=gistId;
+    localStorage.setItem('st_gh_token',token);
+    localStorage.setItem('st_gist_id',gistId);
+    document.getElementById('loading').classList.add('hidden');
+    startApp();
+    toast('Conectat ca @'+user.login+'!');
+  }catch(e){
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('setup').classList.remove('hidden');
+    showMode('join');
     errEl.textContent='Eroare: '+e.message;
     errEl.classList.remove('hidden');
   }
 }
 
 function resetCfg(){
-  if(!confirm('Deconectati acest dispozitiv de la GitHub?')) return;
+  var choice=confirm('Apasa OK pentru a vedea Gist ID-ul (pentru conectarea unui al doilea dispozitiv).\n\nApasa Anuleaza pentru a deconecta acest dispozitiv.');
+  if(choice){
+    // Show Gist ID
+    prompt('Gist ID-ul tau (copiaza-l pe al doilea dispozitiv):', GIST_ID);
+    return;
+  }
+  if(!confirm('Sigur doriti sa deconectati acest dispozitiv?')) return;
   if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   localStorage.removeItem('st_gh_token');
   localStorage.removeItem('st_gist_id');
   GH_TOKEN=''; GIST_ID=''; lastGistUpdatedAt='';
+  showMode(null);
   document.getElementById('setup').classList.remove('hidden');
 }
 
